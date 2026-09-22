@@ -93,6 +93,9 @@ Open a GitHub Issue with:
 - what you expected vs. the dashboard/DB showing,
 - daemon log excerpt if relevant.
 
+The author's A2A agent directory (live agent cards, protocol interop):
+**https://github.com/ralphsanders2001-ai/a2a-agents**
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
