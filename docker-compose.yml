@@ -1,0 +1,14 @@
+services:
+  trader-v2:
+    container_name: trader-v2
+    build: .
+    image: trader-v2:latest
+    restart: unless-stopped
+    network_mode: host          # reaches Main .254:11434 ollama + LAN, dashboard on host :8091
+    volumes:
+      - ./app:/home/ralph/trader-v2             # full app tree bind-mounted: config edits need no rebuild
+      - ./tokens:/home/ralph/.tokens            # robinhood_v2.pickle lives here
+      - ./backup-mount:/mnt/backup-mount        # ml-training / trade-data / reports / hypothetical-labels
+    environment:
+      - TRADER_CONFIG_FILE=config.py            # paper mode
+      - TZ=America/New_York

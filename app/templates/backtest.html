@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Backtest Results — Trader V2</title>
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js" charset="utf-8"></script>
+  <style>
+    :root {
+      --bg: #0d0f19;
+      --card: #1a1d2e;
+      --text: #e6e6e6;
+      --muted: #8b8d98;
+      --green: #22c55e;
+      --red: #ef4444;
+      --blue: #3b82f6;
+      --purple: #a855f7;
+      --border: #2d3142;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 20px;
+    }
+    h1 { margin: 0 0 8px 0; font-size: 28px; }
+    .subtitle { color: var(--muted); margin-bottom: 24px; }
+    .nav { margin-bottom: 24px; }
+    .nav a {
+      color: var(--blue);
+      text-decoration: none;
+      margin-right: 16px;
+    }
+    .nav a:hover { text-decoration: underline; }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .card .label {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .card .value {
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .card .value.green { color: var(--green); }
+    .card .value.red { color: var(--red); }
+
+    .chart-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 900px) {
+      .chart-row { grid-template-columns: 1fr; }
+    }
+    .chart-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .chart-card h3 { margin: 0 0 12px 0; font-size: 16px; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      background: rgba(255,255,255,0.05);
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    td.pos { color: var(--green); }
+    td.neg { color: var(--red); }
+
+    .file-picker {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .file-picker select {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="nav">
+    <a href="/">← Back to Dashboard</a>
+  </div>
+
+  <h1>Backtest Results</h1>
+  <div class="subtitle" id="subtitle">Loading...</div>
+
+  <div class="file-picker">
+    <label>Select backtest run:</label>
+    <select id="runSelect" onchange="loadRun(this.value)"></select>
+  </div>
+
+  <div class="summary-grid" id="summaryGrid"></div>
+
+  <div class="chart-row">
+    <div class="chart-card">
+      <h3>Cumulative P&L Over Time</h3>
+      <div id="pnlChart" style="height: 350px;"></div>
+    </div>
+    <div class="chart-card">
+      <h3>P&L by Symbol</h3>
+      <div id="symbolChart" style="height: 350px;"></div>
+    </div>
+  </div>
+
+  <div class="chart-row">
+    <div class="chart-card">
+      <h3>Win/Loss Distribution</h3>
+      <div id="winLossChart" style="height: 300px;"></div>
+    </div>
+    <div class="chart-card">
+      <h3>Trade P&L Histogram</h3>
+      <div id="histogramChart" style="height: 300px;"></div>
+    </div>
+  </div>
+
+  <h3 style="margin-top: 32px;">Per-Symbol Breakdown</h3>
+  <table id="symbolTable">
+    <thead>
+      <tr>
+        <th>Symbol</th>
+        <th>Trades</th>
+        <th>Wins</th>
+        <th>Losses</th>
+        <th>Win Rate</th>
+        <th>Total P&L</th>
+        <th>Avg Win</th>
+        <th>Avg Loss</th>
+        <th>Max DD</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    let allRuns = [];
+
+    async function loadRuns() {
+      const res = await fetch('/api/backtest/runs');
+      allRuns = await res.json();
+      const select = document.getElementById('runSelect');
+      select.innerHTML = '';
+      allRuns.forEach((r, i) => {
+        const opt = document.createElement('option');
+        opt.value = r.filename;
+        opt.textContent = r.label;
+        if (i === 0) opt.selected = true;
+        select.appendChild(opt);
+      });
+      if (allRuns.length > 0) {
+        loadRun(allRuns[0].filename);
+      } else {
+        document.getElementById('subtitle').textContent = 'No backtest runs found.';
+      }
+    }
+
+    async function loadRun(filename) {
+      const res = await fetch('/api/backtest/run/' + encodeURIComponent(filename));
+      const data = await res.json();
+      renderRun(data);
+    }
+
+    function renderRun(data) {
+      const sub = document.getElementById('subtitle');
+      sub.textContent = `Run: ${data.run_at} • ${data.interval} • ${data.symbols.length} symbols • ${data.summary.total_trades} trades`;
+
+      // Summary cards
+      const s = data.summary;
+      const pnlClass = s.total_pnl >= 0 ? 'green' : 'red';
+      const grid = document.getElementById('summaryGrid');
+      grid.innerHTML = `
+        <div class="card">
+          <div class="label">Total Trades</div>
+          <div class="value">${s.total_trades}</div>
+        </div>
+        <div class="card">
+          <div class="label">Win Rate</div>
+          <div class="value">${s.win_rate.toFixed(1)}%</div>
+        </div>
+        <div class="card">
+          <div class="label">Total P&L</div>
+          <div class="value ${pnlClass}">$${s.total_pnl.toFixed(2)}</div>
+        </div>
+        <div class="card">
+          <div class="label">Winners / Losers</div>
+          <div class="value">${s.total_wins} / ${s.total_losses}</div>
+        </div>
+        <div class="card">
+          <div class="label">Real Fills</div>
+          <div class="value">${s.real_fills_used}</div>
+        </div>
+        <div class="card">
+          <div class="label">Fallback</div>
+          <div class="value">${s.fallback_used}</div>
+        </div>
+      `;
+
+      // Build equity curve from trade list
+      const symbols = data.per_symbol;
+      const symbolData = [];
+
+      symbols.forEach(symData => {
+        const trades = symData.trades || [];
+        if (trades.length === 0) return;
+
+        let running = 0;
+        const xs = [];
+        const ys = [];
+        // Sort by open time
+        trades.sort((a, b) => new Date(a.timestamp_open) - new Date(b.timestamp_open));
+        trades.forEach(t => {
+          if (t.pnl !== null) {
+            running += t.pnl;
+            xs.push(t.timestamp_open);
+            ys.push(running);
+          }
+        });
+        symbolData.push({
+          symbol: symData.symbol,
+          xs: xs,
+          ys: ys,
+          total: symData.gross_pnl
+        });
+      });
+
+      // 1. Cumulative P&L chart
+      const traces = symbolData.map(sd => ({
+        x: sd.xs,
+        y: sd.ys,
+        type: 'scatter',
+        mode: 'lines',
+        name: sd.symbol,
+        stackgroup: 'one',
+      }));
+      traces.push({
+        x: symbols.flatMap(sd => (sd.trades || []).map(t => t.timestamp_open)),
+        y: symbols.flatMap(sd => {
+          let cum = [];
+          let r = 0;
+          (sd.trades || []).forEach(t => { if (t.pnl !== null) { r += t.pnl; cum.push(r); } });
+          return cum;
+        }),
+        type: 'scatter',
+        mode: 'lines',
+        name: 'TOTAL',
+        line: { color: '#fff', width: 3 }
+      });
+
+      const pnlLayout = {
+        paper_bgcolor: 'transparent',
+        plot_bgcolor: 'transparent',
+        font: { color: '#8b8d98' },
+        xaxis: { gridcolor: '#2d3142', title: 'Time' },
+        yaxis: { gridcolor: '#2d3142', title: 'Cumulative P&L ($)', zeroline: true, zerolinecolor: '#666' },
+        margin: { t: 20, b: 40, l: 60, r: 20 },
+        legend: { orientation: 'h', y: -0.15 }
+      };
+      Plotly.newPlot('pnlChart', traces, pnlLayout, {responsive: true, displayModeBar: false});
+
+      // 2. P&L by symbol bar chart
+      const symSorted = [...symbols].sort((a, b) => b.gross_pnl - a.gross_pnl);
+      const symbolBar = [{
+        x: symSorted.map(s => s.symbol),
+        y: symSorted.map(s => s.gross_pnl),
+        type: 'bar',
+        marker: {
+          color: symSorted.map(s => s.gross_pnl >= 0 ? '#22c55e' : '#ef4444')
+        },
+        text: symSorted.map(s => '$' + s.gross_pnl.toFixed(0)),
+        textposition: 'outside'
+      }];
+      const symLayout = {
+        paper_bgcolor: 'transparent',
+        plot_bgcolor: 'transparent',
+        font: { color: '#8b8d98' },
+        xaxis: { gridcolor: '#2d3142' },
+        yaxis: { gridcolor: '#2d3142', title: 'P&L ($)', zeroline: true, zerolinecolor: '#666' },
+        margin: { t: 20, b: 40, l: 60, r: 20 }
+      };
+      Plotly.newPlot('symbolChart', symbolBar, symLayout, {responsive: true, displayModeBar: false});
+
+      // 3. Win/Loss pie
+      const wlData = [{
+        values: [s.total_wins, s.total_losses],
+        labels: ['Wins', 'Losses'],
+        type: 'pie',
+        marker: { colors: ['#22c55e', '#ef4444'] },
+        hole: 0.4
+      }];
+      const wlLayout = {
+        paper_bgcolor: 'transparent',
+        font: { color: '#e6e6e6' },
+        margin: { t: 20, b: 20, l: 20, r: 20 },
+        showlegend: true
+      };
+      Plotly.newPlot('winLossChart', wlData, wlLayout, {responsive: true, displayModeBar: false});
+
+      // 4. P&L histogram
+      const allPnls = [];
+      symbols.forEach(sd => {
+        (sd.trades || []).forEach(t => {
+          if (t.pnl !== null) allPnls.push(t.pnl);
+        });
+      });
+      const histData = [{
+        x: allPnls,
+        type: 'histogram',
+        marker: { color: '#3b82f6' },
+        nbinsx: 30
+      }];
+      const histLayout = {
+        paper_bgcolor: 'transparent',
+        plot_bgcolor: 'transparent',
+        font: { color: '#8b8d98' },
+        xaxis: { gridcolor: '#2d3142', title: 'Trade P&L ($)' },
+        yaxis: { gridcolor: '#2d3142', title: 'Frequency' },
+        margin: { t: 20, b: 40, l: 60, r: 20 }
+      };
+      Plotly.newPlot('histogramChart', histData, histLayout, {responsive: true, displayModeBar: false});
+
+      // 5. Symbol table
+      const tbody = document.querySelector('#symbolTable tbody');
+      tbody.innerHTML = '';
+      symSorted.forEach(s => {
+        const pnlClass = s.gross_pnl >= 0 ? 'pos' : 'neg';
+        const wr = s.total_trades > 0 ? (s.wins / s.total_trades * 100).toFixed(1) + '%' : '—';
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td><strong>${s.symbol}</strong></td>
+          <td>${s.total_trades}</td>
+          <td>${s.wins}</td>
+          <td>${s.losses}</td>
+          <td>${wr}</td>
+          <td class="${pnlClass}">$${s.gross_pnl.toFixed(2)}</td>
+          <td>$${s.avg_win.toFixed(2)}</td>
+          <td>$${s.avg_loss.toFixed(2)}</td>
+          <td>$${s.max_drawdown.toFixed(2)}</td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    loadRuns();
+    // Auto-refresh every 60s
+    setInterval(() => {
+      const sel = document.getElementById('runSelect');
+      if (sel.value) loadRun(sel.value);
+    }, 60000);
+  </script>
+</body>
+</html>

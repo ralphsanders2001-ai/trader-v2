@@ -1,0 +1,14 @@
+[Unit]
+Description=Trader V2 Dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/ralph/trader-v2
+ExecStart=/home/ralph/robinhood-trainer/venv/bin/python /home/ralph/trader-v2/scripts/dashboard.py
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=default.target

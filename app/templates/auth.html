@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Trader V2 — Auth Required</title>
+<style>
+body { font-family: -apple-system, sans-serif; background: #1a1a1a; color: #e0e0e0; margin: 0; padding: 40px; text-align: center; }
+.container { max-width: 480px; margin: 60px auto; background: #2a2a2a; padding: 32px; border-radius: 8px; }
+h1 { color: #fbbf24; }
+input { font-size: 1.4em; padding: 12px; width: 200px; text-align: center; background: #1a1a1a; color: #fff; border: 2px solid #444; border-radius: 4px; letter-spacing: 0.3em; }
+.btn { padding: 12px 24px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 1em; margin-top: 16px; }
+.btn:hover { background: #1d4ed8; }
+.steps { text-align: left; background: #1a1a1a; padding: 20px; border-radius: 4px; margin: 20px 0; }
+.steps li { margin-bottom: 8px; }
+.error { color: #f87171; margin-top: 12px; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>🔐 Robinhood Login</h1>
+<p>Your account needs verification.</p>
+
+<ol class="steps">
+  <li>Check your phone for a Robinhood push notification</li>
+  <li>Approve the login attempt</li>
+  <li>Enter the verification code from the SMS below (or just enter anything if push-only)</li>
+</ol>
+
+<input type="text" id="mfa-code" maxlength="6" placeholder="000000">
+<br>
+<button class="btn" onclick="submitCode()">Submit</button>
+
+<p class="error" id="error-msg"></p>
+</div>
+
+<script>
+function submitCode() {
+  const code = document.getElementById('mfa-code').value.trim();
+  if (!code) {
+    document.getElementById('error-msg').textContent = 'Please enter a code';
+    return;
+  }
+  fetch('/api/auth/submit', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({code: code})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.status === 'ok') {
+      window.location.href = '/';
+    } else {
+      document.getElementById('error-msg').textContent = 'Login failed: ' + (data.detail || 'unknown error');
+    }
+  });
+}
+
+document.getElementById('mfa-code').addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') submitCode();
+});
+</script>
+</body>
+</html>

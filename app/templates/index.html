@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Trader V2 — Live Positions</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="refresh" content="10">
+<style>
+* { box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #1a1a1a; color: #e0e0e0;
+  margin: 0; padding: 12px;
+  -webkit-text-size-adjust: 100%;
+  font-size: 16px; line-height: 1.4;
+}
+h1 { color: #fff; font-size: 1.4em; margin: 0 0 8px 0; }
+h2 { color: #fff; font-size: 1.1em; margin: 16px 0 10px 0; }
+
+/* --- Nav --- */
+.nav { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.nav a {
+  background: #2563eb; color: white;
+  padding: 8px 12px; border-radius: 4px;
+  text-decoration: none; font-size: 0.9em;
+  flex: 1; text-align: center; min-width: 80px;
+}
+
+/* --- Summary cards --- */
+.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px; margin-bottom: 16px;
+}
+.card {
+  background: #2a2a2a; padding: 12px;
+  border-radius: 8px; border-left: 4px solid #4ade80;
+}
+.card.danger { border-color: #f87171; }
+.card.warning { border-color: #fbbf24; }
+.card .label {
+  color: #aaa; font-size: 0.75em;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.card .value { font-size: 1.3em; font-weight: 700; color: #fff; margin-top: 4px; }
+
+/* --- Position cards (mobile-first, replaces table) --- */
+.pos-card {
+  background: #2a2a2a;
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 12px;
+  border-left: 4px solid #4ade80;
+}
+.pos-card.loss { border-left-color: #f87171; }
+.pos-card.profit { border-left-color: #4ade80; }
+
+/* Top row: symbol + SELL button (left-aligned for readability) */
+.pos-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.pos-symbol {
+  font-size: 1.4em; font-weight: 700; color: #fff;
+}
+.pos-strike {
+  font-size: 0.9em; color: #aaa; margin-left: 6px;
+}
+.btn-sell {
+  background: #dc2626; color: white;
+  border: none; border-radius: 4px;
+  padding: 10px 18px;
+  font-size: 0.95em; font-weight: 700;
+  cursor: pointer;
+  min-height: 44px; /* iOS touch target */
+  min-width: 90px;
+}
+.btn-sell:active { background: #b91c1c; }
+
+.btn-hold {
+  background: #fbbf24; color: #1a1a1a;
+  border: none; border-radius: 4px;
+  padding: 10px 18px;
+  font-size: 0.95em; font-weight: 700;
+  cursor: pointer;
+  min-height: 44px; min-width: 90px;
+}
+.btn-hold:active { background: #d97706; }
+
+.btn-unhold {
+  background: #6b7280; color: white;
+  border: none; border-radius: 4px;
+  padding: 10px 18px;
+  font-size: 0.95em; font-weight: 700;
+  cursor: pointer;
+  min-height: 44px; min-width: 90px;
+}
+.btn-unhold:active { background: #4b5563; }
+
+.pos-actions {
+  display: flex; gap: 8px;
+}
+
+.hold-badge {
+  display: inline-block;
+  background: #fbbf24; color: #1a1a1a;
+  padding: 2px 8px; border-radius: 4px;
+  font-size: 0.7em; font-weight: 700;
+  margin-left: 8px; vertical-align: middle;
+}
+
+.on-hold { border-left-color: #fbbf24 !important; }
+
+/* Price row: current price on the LEFT (high visibility) */
+.pos-prices {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 10px;
+  background: #1a1a1a;
+  border-radius: 4px;
+}
+.price-cell { text-align: center; }
+.price-cell .pl { color: #aaa; font-size: 0.7em; text-transform: uppercase; }
+.price-cell .pv { color: #fff; font-size: 1.05em; font-weight: 600; margin-top: 2px; }
+
+/* P&L highlight row */
+.pos-pnl {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px;
+  background: #1a1a1a;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+.pnl-label { color: #aaa; font-size: 0.85em; }
+.pnl-value { font-size: 1.1em; font-weight: 700; }
+
+/* Details row (small) */
+.pos-details {
+  display: flex; justify-content: space-between;
+  font-size: 0.8em; color: #888;
+}
+
+/* Colors */
+.profit { color: #4ade80; }
+.loss { color: #f87171; }
+
+/* Empty state */
+.empty {
+  text-align: center; padding: 30px;
+  color: #888; background: #2a2a2a;
+  border-radius: 8px;
+}
+
+/* --- Closed trades (compact) --- */
+.closed-row {
+  background: #2a2a2a; border-radius: 6px;
+  padding: 8px 12px; margin-bottom: 6px;
+  display: flex; justify-content: space-between;
+  align-items: center; font-size: 0.9em;
+}
+.closed-sym { font-weight: 600; }
+.closed-detail { color: #888; font-size: 0.85em; }
+
+/* --- Queued bids table (2026-09-21): spaced, outlined, alternating rows --- */
+#pending-bids-box table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 6px;          /* vertical spacing between rows */
+  font-size: 0.92em;
+}
+#pending-bids-box th {
+  text-align: left;
+  color: #94a3b8;
+  font-weight: 600;
+  font-size: 0.85em;
+  padding: 6px 12px;
+  border-bottom: 1px solid #3a3a3a;
+}
+#pending-bids-box td {
+  background: #2a2a2a;
+  padding: 10px 12px;             /* readable row height */
+  border-top: 1px solid #3f3f3f;
+  border-bottom: 1px solid #3f3f3f;
+}
+#pending-bids-box td:first-child {
+  border-left: 2px solid #3f3f3f;
+  border-radius: 8px 0 0 8px;
+  font-weight: 700;
+}
+#pending-bids-box td:last-child {
+  border-right: 2px solid #3f3f3f;
+  border-radius: 0 8px 8px 0;
+}
+#pending-bids-box tbody tr:nth-child(odd) td  { background: #262626; }
+#pending-bids-box tbody tr:nth-child(even) td { background: #2e2e2e; }
+#pending-bids-box tbody tr:hover td            { background: #33404d; }
+
+/* --- Mobile breakpoints --- */
+@media (max-width: 480px) {
+  body { padding: 8px; }
+  .pos-prices { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .price-cell .pv { font-size: 0.95em; }
+  h1 { font-size: 1.2em; }
+  .summary { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+<h1>📊 Trader V2 — Live</h1>
+
+<div class="nav">
+  <a href="/">📊 Live</a>
+  <a href="/backtest">📈 Backtest</a>
+  <a href="/review">📋 Review</a>
+  <a href="/settings">⚙️ Settings</a>
+</div>
+
+<!-- Trading Control Bar -->
+<div class="control-bar" id="controlBar">
+  <button id="pauseBtn" class="ctrl-btn danger" onclick="toggleTrading()">
+    <span id="pauseBtnText">⏸ Pause Trading</span>
+  </button>
+  <span id="tradingStatus" class="status-ok">Trading: Active</span>
+</div>
+
+<!-- Pending Orders Panel -->
+<div id="pendingPanel" class="pending-panel" style="display:none;">
+  <h2>⏳ Live Orders <span id="pendingCount">(0)</span></h2>
+  <div id="pendingList"></div>
+</div>
+
+<style>
+#pendingList .pending-item { display: block; }
+.order-line { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+.order-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.order-actions input[type="number"] {
+  background: #1a1a1a; color: #e0e0e0; border: 1px solid #444;
+  padding: 5px 8px; border-radius: 4px; width: 80px; font-family: monospace;
+}
+.order-actions select {
+  background: #1a1a1a; color: #e0e0e0; border: 1px solid #444;
+  padding: 5px; border-radius: 4px;
+}
+.replace-btn {
+  background: #2563eb; color: white; border: none;
+  padding: 6px 12px; border-radius: 4px; cursor: pointer;
+  font-size: 0.85em; font-weight: 600;
+}
+.replace-btn:hover { background: #1d4ed8; }
+.extend-btn {
+  background: #7c3aed; color: white; border: none;
+  padding: 6px 12px; border-radius: 4px; cursor: pointer;
+  font-size: 0.85em; font-weight: 600;
+}
+.extend-btn:hover { background: #6d28d9; }
+</style>
+
+<style>
+.control-bar {
+  display: flex; gap: 10px; align-items: center;
+  margin-bottom: 16px; padding: 10px;
+  background: #2a2a2a; border-radius: 8px;
+}
+.ctrl-btn {
+  padding: 10px 16px; border: none; border-radius: 6px;
+  font-size: 0.95em; font-weight: 600; cursor: pointer;
+  color: white; transition: opacity 0.2s;
+}
+.ctrl-btn:hover { opacity: 0.85; }
+.ctrl-btn.danger { background: #dc2626; }
+.ctrl-btn.success { background: #16a34a; }
+.status-ok { color: #4ade80; font-weight: 600; font-size: 0.95em; }
+.status-paused { color: #f87171; font-weight: 600; font-size: 0.95em; }
+
+.pending-panel {
+  background: #2a2a2a; padding: 14px; border-radius: 8px;
+  margin-bottom: 16px; border-left: 4px solid #fbbf24;
+}
+.pending-panel h2 { margin: 0 0 10px 0; color: #fbbf24; }
+.pending-item {
+  background: #1f1f1f; padding: 10px; border-radius: 4px;
+  margin-bottom: 8px; display: flex; justify-content: space-between;
+  align-items: center; flex-wrap: wrap; gap: 8px;
+}
+.pending-info { font-size: 0.9em; }
+.pending-info strong { color: #fff; }
+.cancel-btn {
+  background: #dc2626; color: white; border: none;
+  padding: 6px 12px; border-radius: 4px; cursor: pointer;
+  font-size: 0.85em; font-weight: 600;
+}
+.cancel-btn:hover { background: #b91c1c; }
+</style>
+
+<script>
+// Auto-refresh pending orders and trading status every 5 seconds
+async function refreshControls() {
+  try {
+    // Trading status
+    const statusRes = await fetch('/api/trading-status');
+    const status = await statusRes.json();
+    const btn = document.getElementById('pauseBtn');
+    const btnText = document.getElementById('pauseBtnText');
+    const statusLabel = document.getElementById('tradingStatus');
+    if (status.paused) {
+      btn.className = 'ctrl-btn success';
+      btnText.textContent = '▶ Resume Trading';
+      statusLabel.textContent = 'Trading: PAUSED (' + (status.reason || 'manual') + ')';
+      statusLabel.className = 'status-paused';
+    } else {
+      btn.className = 'ctrl-btn danger';
+      btnText.textContent = '⏸ Pause Trading';
+      statusLabel.textContent = 'Trading: Active';
+      statusLabel.className = 'status-ok';
+    }
+
+    // Pending orders
+    const ordersRes = await fetch('/api/pending-orders');
+    const ordersData = await ordersRes.json();
+    const panel = document.getElementById('pendingPanel');
+    const list = document.getElementById('pendingList');
+    const count = document.getElementById('pendingCount');
+    if (ordersData.orders && ordersData.orders.length > 0) {
+      panel.style.display = 'block';
+      count.textContent = '(' + ordersData.count + ')';
+      list.innerHTML = ordersData.orders.map((o, i) => `
+        <div class="pending-item">
+          <div class="order-line">
+            <div class="pending-info">
+              <strong>${o.symbol}</strong> — $${(o.strike||0).toFixed(2)} ${o.option_type||''} exp ${o.expiry||'?'}
+              <br>${o.side === 'buy' ? 'BUY' : 'SELL'} ${o.quantity} @ $${(o.price||0).toFixed(2)} limit · ${o.state} · TIF ${o.time_in_force}
+              ${o.filled_quantity > 0 ? '<br>Partial fill: ' + o.filled_quantity + '/' + o.quantity : ''}
+            </div>
+            <div class="order-actions">
+              <input type="number" step="0.01" id="price-${i}" value="${(o.price||0).toFixed(2)}" title="New limit price">
+              <input type="number" step="1" min="1" id="qty-${i}" value="${o.quantity}" title="New quantity">
+              <select id="tif-${i}" title="Time in force">
+                <option value="gtc" ${o.time_in_force === 'gtc' ? 'selected' : ''}>GTC</option>
+                <option value="gfd" ${o.time_in_force === 'gfd' ? 'selected' : ''}>Day (GFD)</option>
+                <option value="ioc" ${o.time_in_force === 'ioc' ? 'selected' : ''}>IOC</option>
+              </select>
+              <button class="replace-btn" onclick="replaceOrder('${o.id}', ${i})">Replace</button>
+              <button class="extend-btn" onclick="extendOrder('${o.id}', ${i})">Extend→GTC</button>
+              <button class="cancel-btn" onclick="cancelOrder('${o.id}')">Cancel</button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    } else {
+      panel.style.display = 'none';
+    }
+  } catch (e) {
+    console.error('refresh failed:', e);
+  }
+}
+
+async function toggleTrading() {
+  const status = await fetch('/api/trading-status').then(r => r.json());
+  const endpoint = status.paused ? '/api/resume-trading' : '/api/pause-trading';
+  const res = await fetch(endpoint, { method: 'POST' });
+  const result = await res.json();
+  await refreshControls();
+}
+
+async function cancelOrder(orderId) {
+  if (!confirm('Cancel this order?')) return;
+  const res = await fetch('/api/orders/cancel/' + orderId, { method: 'POST' });
+  const result = await res.json();
+  await refreshControls();
+}
+
+async function replaceOrder(orderId, i) {
+  const price = document.getElementById('price-' + i).value;
+  const qty = document.getElementById('qty-' + i).value;
+  const tif = document.getElementById('tif-' + i).value;
+  if (!confirm(`Replace order?\nCancel old order and place a new one:\nprice $${price} × ${qty} @ ${tif.toUpperCase()}`)) return;
+  const res = await fetch('/api/orders/replace/' + orderId, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({price: price, quantity: qty, time_in_force: tif})
+  });
+  const result = await res.json();
+  if (result.success) {
+    alert('Order replaced. New order id: ' + (result.new_order_id || '?'));
+  } else {
+    alert('Replace failed: ' + (result.error || JSON.stringify(result)));
+  }
+  await refreshControls();
+}
+
+async function extendOrder(orderId, i) {
+  if (!confirm("Extend this order to Good-Til-Cancelled (GTC)?\nSame price and quantity — the order will be re-placed as GTC.")) return;
+  const res = await fetch('/api/orders/replace/' + orderId, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({time_in_force: 'gtc'})
+  });
+  const result = await res.json();
+  if (result.success) {
+    alert('Order extended to GTC. New order id: ' + (result.new_order_id || '?'));
+  } else {
+    alert('Extend failed: ' + (result.error || JSON.stringify(result)));
+  }
+  await refreshControls();
+}
+
+// Initial load + periodic refresh
+refreshControls();
+setInterval(refreshControls, 5000);
+
+async function refreshCapital() {
+  try {
+    const r = await fetch('/api/capital');
+    if (!r.ok) return;
+    const c = await r.json();
+    if (c.error) return;
+    const el = id => document.getElementById(id);
+    try {
+      const pr = await fetch('/api/paper-pending');
+      if (pr.ok) {
+        const pd = await pr.json();
+        if (el('capital-pending')) el('capital-pending').textContent = pd.count;
+        const box = el('pending-bids-box');
+        if (box) {
+          if (!pd.count) {
+            box.innerHTML = '<i>No queued bids — every pending buy either filled or was cancelled.</i>';
+          } else {
+            const fmt = v => (v === null || v === undefined) ? '—' : '$' + Number(v).toFixed(2);
+            const rows = pd.pending.map(p => {
+              const fill = p.will_fill_now
+                ? '<span style="color:#2ecc71;">FILLS NOW</span>'
+                : (p.live_ask !== null && p.live_ask !== undefined
+                   ? '$' + (p.live_ask - p.limit_price).toFixed(2) + ' away'
+                   : '');
+              return `<tr><td>${p.symbol}</td><td>$${p.option_strike} ${p.option_type}</td>` +
+                `<td>${p.option_expiry}</td><td>$${Number(p.limit_price).toFixed(2)}</td>` +
+                `<td>${fmt(p.live_bid)}</td><td>${fmt(p.live_ask)}</td>` +
+                `<td>${fill}</td><td>${p.queued_et}</td></tr>`;
+            }).join('');
+            box.innerHTML = `<table class="trades"><thead><tr><th>Symbol</th><th>Contract</th>` +
+              `<th>Expiry</th><th>Bid limit</th><th>Live bid</th><th>Live ask</th>` +
+              `<th>Distance to fill</th><th>Queued (ET)</th></tr></thead><tbody>${rows}</tbody></table>`;
+          }
+        }
+      }
+    } catch (e) {}
+    if (el('capital-balance')) {
+      try {
+        const pr = await fetch('/api/paper-pending');
+        if (pr.ok) {
+          const pd = await pr.json();
+          const pel = el('capital-pending');
+          if (pel) pel.textContent = pd.count;
+        }
+      } catch (e) {}
+
+      el('capital-balance').textContent = '$' + c.balance.toFixed(2);
+      el('capital-balance').style.color = c.realized_pnl < 0 ? '#e74c3c' : (c.realized_pnl > 0 ? '#2ecc71' : '');
+      el('capital-avail').textContent = '$' + c.available.toFixed(2);
+      el('capital-realized').textContent = (c.realized_pnl >= 0 ? '+$' : '-$') + Math.abs(c.realized_pnl).toFixed(2);
+      el('capital-reserved').textContent = '$' + c.reserved.toFixed(2);
+    }
+  } catch (e) { /* dashboard offline */ }
+}
+refreshCapital();
+setInterval(refreshCapital, 5000);
+</script>
+
+{% if account %}
+<div class="summary">
+  <div class="card">
+    <div class="label">Equity</div>
+    <div class="value">${{ "%.2f"|format(account.equity|float) }}</div>
+  </div>
+  <div class="card">
+    <div class="label">Buying Power</div>
+    <div class="value">${{ "%.2f"|format(account.day_trade_buying_power|float) }}</div>
+  </div>
+  <div class="card" id="capital-card">
+    <div class="label">Capital ($190 + P&L)</div>
+    <div class="value" id="capital-balance">$--</div>
+    <div class="label" style="font-size:11px;margin-top:4px;">
+      Avail <span id="capital-avail">$--</span> · Realized <span id="capital-realized">$--</span> · Reserved <span id="capital-reserved">$--</span> · Queued buys <span id="capital-pending">0</span>
+    </div>
+  </div>
+  <div class="card {% if circuit and circuit.tripped %}danger{% endif %}">
+    <div class="label">Daily P&L</div>
+    <div class="value {% if circuit and circuit.realized_pnl < 0 %}loss{% elif circuit and circuit.realized_pnl > 0 %}profit{% endif %}">
+      ${{ "%.2f"|format(circuit.realized_pnl|float if circuit else 0) }}
+    </div>
+  </div>
+  <div class="card {% if circuit and circuit.tripped %}danger{% endif %}">
+    <div class="label">Circuit</div>
+    <div class="value">
+      {% if circuit and circuit.tripped %}TRIPPED
+      {% else %}OK{% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<h2>Queued Bids (patient orders waiting for the price)</h2>
+<div id="pending-bids-box" style="margin:8px 0 16px 0; font-size:13px;">Loading…</div>
+
+<h2>Open Positions ({{ positions|length }})</h2>
+
+{% if positions %}
+  {% for pos in positions %}
+  <div class="pos-card {% if pos.pnl_dollar > 0 %}profit{% elif pos.pnl_dollar < 0 %}loss{% endif %} {% if pos.on_hold %}on-hold{% endif %}">
+
+    <!-- Header: Symbol + action buttons (HOLD/UNHOLD/SELL) -->
+    <div class="pos-header">
+      <div>
+        <span class="pos-symbol">{{ pos.symbol }}</span>
+        <span class="pos-strike">${{ "%.2f"|format(pos.option_strike) }} {{ pos.option_type }}</span>
+        {% if pos.on_hold %}<span class="hold-badge">🔒 HOLD</span>{% endif %}
+      </div>
+      <div class="pos-actions">
+        {% if pos.on_hold %}
+          <button class="btn-unhold" onclick="unholdPos({{ pos.id }}, '{{ pos.symbol }}')">UNHOLD</button>
+          <button class="btn-sell" onclick="sellNow({{ pos.id }}, '{{ pos.symbol }}')">SELL</button>
+        {% else %}
+          <button class="btn-hold" onclick="holdPos({{ pos.id }}, '{{ pos.symbol }}')">HOLD</button>
+          <button class="btn-sell" onclick="sellNow({{ pos.id }}, '{{ pos.symbol }}')">SELL</button>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Current price row (LEFT-positioned for visibility) -->
+    <div class="pos-prices">
+      <div class="price-cell">
+        <div class="pl">Bid</div>
+        <div class="pv">${{ "%.2f"|format(pos.bid) }}</div>
+      </div>
+      <div class="price-cell">
+        <div class="pl">Ask</div>
+        <div class="pv">${{ "%.2f"|format(pos.ask) }}</div>
+      </div>
+      <div class="price-cell">
+        <div class="pl">Entry</div>
+        <div class="pv">${{ "%.2f"|format(pos.entry_price) }}</div>
+      </div>
+      {% if pos.target_exit_price %}
+      <div class="price-cell">
+        <div class="pl">Target (+{{ "%.0f"|format((pos.target_exit_price / pos.entry_price - 1) * 100) }}%)</div>
+        <div class="pv" style="color:#4caf50">${{ "%.2f"|format(pos.target_exit_price) }}</div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- P&L row -->
+    <div class="pos-pnl">
+      <span class="pnl-label">P&L</span>
+      <span class="pnl-value {% if pos.pnl_dollar > 0 %}profit{% elif pos.pnl_dollar < 0 %}loss{% endif %}">
+        {{ "%+.1f"|format(pos.pnl_pct) }}% / {{ "%+.2f"|format(pos.pnl_dollar) }}
+      </span>
+    </div>
+
+    <!-- Small details -->
+    <div class="pos-details">
+      <span>Qty {{ pos.quantity }} · Exp {{ pos.option_expiry[5:] }}</span>
+      <span>Tier: {{ pos.tier }}</span>
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="empty">No open positions.</div>
+{% endif %}
+
+<h2>Closed Today ({{ closed|length }})</h2>
+{% if closed %}
+  {% for t in closed %}
+  <div class="closed-row">
+    <span>
+      <span class="closed-sym">{{ t.symbol }}</span>
+      <span class="closed-detail">${{ "%.2f"|format(t.option_strike) }} {{ t.option_type }}</span>
+    </span>
+    <span class="{% if t.pnl > 0 %}profit{% elif t.pnl < 0 %}loss{% endif %}">
+      {{ "%+.2f"|format(t.pnl) }}
+    </span>
+  </div>
+  <div class="closed-detail" style="margin: 0 0 8px 12px; line-height: 1.5;">
+    bought {{ t.timestamp_open[:16].replace('T',' ') }} ET @ ${{ "%.2f"|format(t.entry_price) }}
+    &nbsp;→&nbsp; sold {{ (t.timestamp_close[:16].replace('T',' ') if t.timestamp_close else '—') }} ET @ ${{ "%.2f"|format(t.exit_price) if t.exit_price else '—' }}
+    <br>
+    <span style="color: #6a9fb5;">reason: {{ t.exit_reason or '—' }}</span>
+    {% if t.net_pnl is not none and t.net_pnl != t.pnl %}<span style="color:#888;">· net {{ "%+.2f"|format(t.net_pnl) }} (fees ${{ "%.2f"|format(t.fees or 0) }})</span>{% endif %}
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="empty">No closed trades today.</div>
+{% endif %}
+
+<h2>Recent Signals &amp; Bids (last 4h)</h2>
+{% if recent_signals %}
+  {% for s in recent_signals %}
+  <div class="closed-row">
+    <span>
+      <span class="closed-sym">{{ s.symbol }}</span>
+      <span class="closed-detail">{{ s.direction or '—' }} · score {{ s.score if s.score is not none else '—' }}{% if s.spread_pct %} · spread {{ "%.1f"|format(s.spread_pct) }}%{% endif %}{% if s.volume_ratio %} · vol {{ "%.1f"|format(s.volume_ratio) }}x{% endif %}</span>
+    </span>
+    <span class="{% if s.status == 'filled' %}profit{% elif s.status == 'rejected' %}loss{% else %}{% endif %}">
+      {% if s.status == 'candidate' %}CANDIDATE
+      {% elif s.status == 'filled' %}FILLED
+      {% else %}{{ s.rejection_reason or s.status }}{% endif %}
+      <span class="closed-detail" style="display:block; text-align:right;">{{ s.timestamp[11:16] }} ET</span>
+    </span>
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="empty">No signals in the last 4 hours.</div>
+{% endif %}
+
+<script>
+function sellNow(positionId, symbol) {
+  if (!confirm('SELL ' + symbol + ' now at market? This cannot be undone.')) return;
+  fetch('/api/sell/' + positionId, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({reason: 'manual_dashboard'})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      alert('Sell order placed for ' + symbol);
+      location.reload();
+    } else {
+      alert('Sell failed: ' + JSON.stringify(data));
+    }
+  })
+  .catch(e => alert('Error: ' + e));
+}
+
+function holdPos(positionId, symbol) {
+  if (!confirm('HOLD ' + symbol + '? The system will NOT auto-sell this position (no loss cap, no profit target). Only manual SELL will close it.')) return;
+  fetch('/api/hold/' + positionId, {method: 'POST'})
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      alert(symbol + ' is now ON HOLD. Auto-sell rules disabled.');
+      location.reload();
+    } else {
+      alert('Hold failed: ' + JSON.stringify(data));
+    }
+  })
+  .catch(e => alert('Error: ' + e));
+}
+
+function unholdPos(positionId, symbol) {
+  if (!confirm('UNHOLD ' + symbol + '? The system will resume normal exit rules (loss cap, profit target).')) return;
+  fetch('/api/unhold/' + positionId, {method: 'POST'})
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      alert(symbol + ' is no longer on hold. Normal exit rules active.');
+      location.reload();
+    } else {
+      alert('Unhold failed: ' + JSON.stringify(data));
+    }
+  })
+  .catch(e => alert('Error: ' + e));
+}
+</script>
+</body>
+</html>

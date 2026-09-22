@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trade Lifecycle — Trader V2</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --fg: #e6edf3; --dim: #8b949e;
+    --green: #3fb950; --red: #f85149; --blue: #58a6ff; --amber: #d29922;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; background: var(--bg); color: var(--fg);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 14px;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--dim); margin-bottom: 20px; }
+  .sub a { color: var(--blue); text-decoration: none; }
+  .sub a:hover { text-decoration: underline; }
+  .controls { margin-bottom: 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .controls input {
+    background: var(--panel); border: 1px solid var(--border); color: var(--fg);
+    padding: 8px 12px; border-radius: 6px; font-size: 14px; width: 220px;
+  }
+  .controls label { color: var(--dim); display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .symbol-section {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    margin-bottom: 24px; overflow: hidden;
+  }
+  .symbol-header {
+    padding: 12px 16px; border-bottom: 2px solid var(--border);
+    display: flex; align-items: baseline; gap: 14px; cursor: pointer; user-select: none;
+  }
+  .symbol-header:hover { background: #1c2129; }
+  .symbol-name { font-size: 18px; font-weight: 700; }
+  .symbol-stats { color: var(--dim); font-size: 13px; }
+  .symbol-stats .win { color: var(--green); } .symbol-stats .loss { color: var(--red); }
+  .chev { color: var(--dim); margin-left: auto; }
+  .trade-card { border-bottom: 1px solid var(--border); padding: 12px 16px; }
+  .trade-card:last-child { border-bottom: none; }
+  .trade-title { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; margin-bottom: 8px; }
+  .trade-id { color: var(--dim); font-size: 12px; }
+  .contract { font-weight: 600; }
+  .pnl-pos { color: var(--green); font-weight: 700; }
+  .pnl-neg { color: var(--red); font-weight: 700; }
+  .pnl-zero { color: var(--dim); font-weight: 700; }
+  .reason-badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--border);
+    color: var(--dim); text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .reason-badge.win { border-color: var(--green); color: var(--green); }
+  .reason-badge.loss { border-color: var(--red); color: var(--red); }
+  ul.bullets { margin: 4px 0 0; padding-left: 20px; }
+  ul.bullets li { margin: 3px 0; line-height: 1.45; }
+  .k { color: var(--dim); }
+  .v { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .open-tag { color: var(--amber); font-weight: 600; }
+  .section-label {
+    color: var(--blue); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;
+    margin-top: 10px; margin-bottom: 2px;
+  }
+  .status { color: var(--dim); padding: 8px 16px; }
+  .collapsed .trade-card { display: none; }
+  .collapsed .chev { transform: rotate(-90deg); display: inline-block; }
+</style>
+</head>
+<body>
+<h1>Trade Lifecycle — per symbol</h1>
+<div class="sub">
+  Bid placement &rarr; fill &rarr; first profit / first loss &rarr; sell placement &rarr; exit. Newest 500 trades.
+  <a href="/">Dashboard</a> &middot; <a href="/settings">Settings</a> &middot; <a href="/review">Review</a>
+</div>
+
+<div class="controls">
+  <input id="filter" type="text" placeholder="Filter by symbol… (e.g. NVDA)">
+  <label><input type="checkbox" id="hide-wins"> Hide winners</label>
+  <label><input type="checkbox" id="hide-closed"> Open positions only</label>
+  <span class="symbol-stats" id="count"></span>
+</div>
+
+<div id="content" class="status">Loading…</div>
+
+<script>
+const money = v => (v === null || v === undefined) ? "—" : "$" + Number(v).toFixed(2);
+const t = (v, f) => (v ? v : "—");
+
+function pnlClass(v) {
+  if (v === null || v === undefined) return "pnl-zero";
+  return v > 0 ? "pnl-pos" : (v < 0 ? "pnl-neg" : "pnl-zero");
+}
+function reasonClass(r) {
+  if (!r) return "";
+  return /cap|loss|stop|eod|orphan|hold_time/.test(r) ? "loss" : "win";
+}
+
+function tradeCard(tr) {
+  const isWin = (tr.pnl || 0) > 0, isLoss = (tr.pnl || 0) < 0;
+  const open = !tr.timestamp_close;
+  let li = "";
+
+  li += `<li><span class="k">Purchase price &amp; time at bid placement:</span> ` +
+        `<span class="v">${money(tr.bid_place_price)}</span> placed <span class="v">${t(tr.bid_place_time_f)}</span>` +
+        (tr.bid_at_open != null ? ` <span class="k">(market at placement: bid ${money(tr.bid_at_open)} / ask ${money(tr.ask_at_open)})</span>` : "") + `</li>`;
+  li += `<li><span class="k">Bid price:</span> <span class="v">${money(tr.bid_place_price)}</span>` +
+        (tr.bid_at_open != null ? ` <span class="k">(market bid ${money(tr.bid_at_open)})</span>` : "") + `</li>`;
+  li += `<li><span class="k">Bid purchase (fill) time &amp; price:</span> ` +
+        `<span class="v">${t(tr.bid_fill_time_f)}</span> @ <span class="v">${money(tr.entry_price)}</span>` +
+        ` <span class="k">(opened ${t(tr.timestamp_open_f)})</span></li>`;
+  li += `<li><span class="k">Sell placement price &amp; time:</span> ` +
+        `<span class="v">${money(tr.sell_place_price)}</span> placed <span class="v">${t(tr.sell_place_time_f)}</span></li>`;
+  if (open) {
+    li += `<li><span class="k">Sold:</span> <span class="open-tag">OPEN — not sold yet</span>` +
+          (tr.exit_reason ? ` <span class="k">(pending: ${tr.exit_reason})</span>` : "") + `</li>`;
+  } else {
+    li += `<li><span class="k">Sold:</span> <span class="v">${money(tr.exit_price)}</span>` +
+          ` at <span class="v">${t(tr.timestamp_close_f)}</span>` +
+          ` — reason: <span class="reason-badge ${reasonClass(tr.exit_reason)}">${tr.exit_reason || "—"}</span>` +
+          ` <span class="k">(P&amp;L ${money(tr.pnl)}, net ${money(tr.net_pnl)})</span></li>`;
+  }
+  li += `<li><span class="k">First went into profit:</span> ` +
+        (tr.time_first_profit_f
+          ? `<span class="v" style="color:var(--green)">${tr.time_first_profit_f}</span> @ <span class="v">${money(tr.price_first_profit)}</span>`
+          : `<span class="k">never (no poll showed it above entry)</span>`) + `</li>`;
+  li += `<li><span class="k">First went into loss:</span> ` +
+        (tr.time_first_loss_f
+          ? `<span class="v" style="color:var(--red)">${tr.time_first_loss_f}</span> @ <span class="v">${money(tr.price_first_loss)}</span>`
+          : `<span class="k">never (never polled below entry)</span>`) + `</li>`;
+  if (tr.peak_price != null) {
+    li += `<li><span class="k">Peak:</span> <span class="v" style="color:var(--green)">${money(tr.peak_price)}</span> at <span class="v">${t(tr.peak_time_f)}</span></li>`;
+  }
+  if (tr.trough_price != null) {
+    li += `<li><span class="k">Trough:</span> <span class="v" style="color:var(--red)">${money(tr.trough_price)}</span> at <span class="v">${t(tr.trough_time_f)}</span></li>`;
+  }
+  return `<div class="trade-card">
+    <div class="trade-title">
+      <span class="trade-id">#${tr.id}</span>
+      <span class="contract">$${tr.option_strike} ${String(tr.option_type).toUpperCase()}</span>
+      <span class="k">exp ${tr.option_expiry}</span>
+      <span class="${pnlClass(tr.pnl)}">${open ? "OPEN" : (isWin ? "+" : "") + (tr.pnl != null ? money(tr.pnl) : "—")}</span>
+      ${tr.exit_reason ? `<span class="reason-badge ${reasonClass(tr.exit_reason)}">${tr.exit_reason}</span>` : "<span class=\"open-tag\">open</span>"}
+    </div>
+    <div class="section-label">Lifecycle</div>
+    <ul class="bullets">${li}</ul>
+  </div>`;
+}
+
+function symbolSection(sym, trades) {
+  const closed = trades.filter(x => x.pnl != null);
+  const wins = closed.filter(x => x.pnl > 0).length;
+  const losses = closed.filter(x => x.pnl < 0).length;
+  const total = closed.reduce((a, x) => a + (x.pnl || 0), 0);
+  const stats = `${trades.length} trades &middot; <span class="win">${wins}W</span> / <span class="loss">${losses}L</span> &middot; net <span class="${pnlClass(total)}">${total >= 0 ? "+" : ""}$${total.toFixed(2)}</span>`;
+  return `<div class="symbol-section" data-symbol="${sym}">
+    <div class="symbol-header" onclick="this.parentElement.classList.toggle('collapsed')">
+      <span class="symbol-name">${sym}</span>
+      <span class="symbol-stats">${stats}</span>
+      <span class="chev">▾</span>
+    </div>
+    ${trades.map(tradeCard).join("")}
+  </div>`;
+}
+
+let DATA = { symbols: {}, total: 0 };
+function render() {
+  const f = document.getElementById("filter").value.trim().toUpperCase();
+  const hideWins = document.getElementById("hide-wins").checked;
+  const hideClosed = document.getElementById("hide-closed").checked;
+  const el = document.getElementById("content");
+  let shown = 0;
+  const html = Object.entries(DATA.symbols)
+    .filter(([sym]) => !f || sym.includes(f))
+    .map(([sym, trades]) => {
+      let tt = trades;
+      if (hideWins) tt = tt.filter(x => !((x.pnl || 0) > 0));
+      if (hideClosed) tt = tt.filter(x => !x.timestamp_close);
+      shown += tt.length;
+      return { sym, tt };
+    })
+    .filter(s => s.tt.length)
+    .map(s => symbolSection(s.sym, s.tt))
+    .join("");
+  el.innerHTML = html || `<div class="status">No trades match.</div>`;
+  document.getElementById("count").textContent = `${shown} of ${DATA.total} trades`;
+}
+
+async function load() {
+  try {
+    const r = await fetch("/api/lifecycle");
+    DATA = await r.json();
+    render();
+  } catch (e) {
+    document.getElementById("content").textContent = "Failed to load: " + e;
+  }
+}
+
+document.getElementById("filter").addEventListener("input", render);
+document.getElementById("hide-wins").addEventListener("change", render);
+document.getElementById("hide-closed").addEventListener("change", render);
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>

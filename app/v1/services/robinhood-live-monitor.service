@@ -1,0 +1,16 @@
+[Unit]
+Description=Ralph's Robinhood live monitor daemon (30s poll interval)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/ralph/robinhood-trainer
+Environment=MONITOR_POLL_SECONDS=30
+ExecStart=/home/ralph/robinhood-trainer/venv/bin/python /home/ralph/robinhood-trainer/scripts/monitor_active.py --mode live --poll 30
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

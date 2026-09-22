@@ -1,0 +1,39 @@
+# Credentials & tokens — NEVER commit
+app/rh_credentials.py
+*.pickle
+*.env
+tokens/
+.env
+
+# Runtime data
+app/data/
+app/logs/
+app/cache/
+app/models/*.json
+app/backups/
+app/backtest_results/
+app/audit-reports/
+app/api-audit-reports/
+app/notes/
+app/trade-data/
+app/daily-summaries/
+app/v1/backups/
+app/v1/data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Local config cruft
+*.bak
+*.bak.*
+*.corrupt*
+*.nuked*
+*.lock
+*.rebuild

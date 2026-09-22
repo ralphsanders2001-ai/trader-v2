@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Weekly Review — Trader V2</title>
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js" charset="utf-8"></script>
+  <style>
+    :root {
+      --bg: #0d0f19;
+      --card: #1a1d2e;
+      --text: #e6e6e6;
+      --muted: #8b8d98;
+      --green: #22c55e;
+      --red: #ef4444;
+      --blue: #3b82f6;
+      --border: #2d3142;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 20px;
+    }
+    h1 { margin: 0 0 8px 0; font-size: 28px; }
+    h3 { margin: 0 0 12px 0; font-size: 16px; }
+    .subtitle { color: var(--muted); margin-bottom: 24px; }
+    .nav { margin-bottom: 24px; }
+    .nav a { color: var(--blue); text-decoration: none; margin-right: 16px; }
+    .nav a:hover { text-decoration: underline; }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .card .label {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .card .value {
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .green { color: var(--green); }
+    .red { color: var(--red); }
+
+    .section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .section h2 {
+      margin: 0 0 16px 0;
+      font-size: 18px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    td.pos { color: var(--green); font-weight: 600; }
+    td.neg { color: var(--red); font-weight: 600; }
+
+    .chart-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 900px) { .chart-row { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="nav">
+    <a href="/">← Back to Dashboard</a>
+    <a href="/backtest">Backtest Results</a>
+  </div>
+
+  <h1>Weekly Trading Review</h1>
+  <div class="subtitle" id="subtitle">Loading...</div>
+
+  <div class="summary-grid" id="summaryGrid"></div>
+
+  <div class="chart-row" style="margin-bottom: 20px;">
+    <div class="section" style="margin: 0;">
+      <h3>Daily P&L</h3>
+      <div id="dailyChart" style="height: 280px;"></div>
+    </div>
+    <div class="section" style="margin: 0;">
+      <h3>By Side (Call vs Put)</h3>
+      <div id="sideChart" style="height: 280px;"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>By Symbol</h2>
+    <table id="symbolTable">
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Trades</th>
+          <th>Wins</th>
+          <th>Losses</th>
+          <th>Win Rate</th>
+          <th>P&L</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>By Exit Reason</h2>
+    <table id="reasonTable">
+      <thead>
+        <tr>
+          <th>Reason</th>
+          <th>Count</th>
+          <th>P&L</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>By Entry Score</h2>
+    <table id="scoreTable">
+      <thead>
+        <tr>
+          <th>Score Range</th>
+          <th>Trades</th>
+          <th>P&L</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    async function load() {
+      const res = await fetch('/api/review');
+      const d = await res.json();
+      render(d);
+    }
+
+    function render(d) {
+      const sub = document.getElementById('subtitle');
+      if (d.total_trades === 0) {
+        sub.textContent = `Last ${d.period_days} days: no closed trades yet.`;
+        return;
+      }
+      sub.textContent = `Last ${d.period_days} days • Mode: ${d.by_mode ? Object.keys(d.by_mode).join(', ') : '?'}`;
+
+      // Summary
+      const pnlClass = d.total_pnl >= 0 ? 'green' : 'red';
+      const grid = document.getElementById('summaryGrid');
+      grid.innerHTML = `
+        <div class="card">
+          <div class="label">Total Trades</div>
+          <div class="value">${d.total_trades}</div>
+        </div>
+        <div class="card">
+          <div class="label">Win Rate</div>
+          <div class="value">${d.win_rate.toFixed(1)}%</div>
+        </div>
+        <div class="card">
+          <div class="label">Total P&L</div>
+          <div class="value ${pnlClass}">$${d.total_pnl.toFixed(2)}</div>
+        </div>
+        <div class="card">
+          <div class="label">Winners / Losers</div>
+          <div class="value">${d.winners} / ${d.losers}</div>
+        </div>
+      `;
+
+      // Daily P&L chart (use by_symbol entries with daily bucketing if available)
+      // If no daily breakdown, use cumulative by exit reason
+      const dailyTrace = [{
+        x: Object.keys(d.by_symbol || {}),
+        y: Object.values(d.by_symbol || {}).map(s => s.pnl),
+        type: 'bar',
+        marker: { color: Object.values(d.by_symbol || {}).map(s => s.pnl >= 0 ? '#22c55e' : '#ef4444') }
+      }];
+      Plotly.newPlot('dailyChart', dailyTrace, {
+        paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+        font: { color: '#8b8d98' },
+        xaxis: { gridcolor: '#2d3142' },
+        yaxis: { gridcolor: '#2d3142', title: 'P&L ($)', zeroline: true, zerolinecolor: '#666' },
+        margin: { t: 20, b: 40, l: 60, r: 20 }
+      }, {responsive: true, displayModeBar: false});
+
+      // Side chart
+      const sides = d.by_side || {};
+      const sideData = [{
+        labels: Object.keys(sides),
+        values: Object.values(sides).map(s => Math.abs(s.pnl)),
+        type: 'pie',
+        marker: { colors: ['#22c55e', '#ef4444', '#3b82f6'] },
+        text: Object.values(sides).map(s => '$' + s.pnl.toFixed(0)),
+        hole: 0.4
+      }];
+      Plotly.newPlot('sideChart', sideData, {
+        paper_bgcolor: 'transparent', font: { color: '#e6e6e6' },
+        margin: { t: 20, b: 20, l: 20, r: 20 }
+      }, {responsive: true, displayModeBar: false});
+
+      // Symbol table
+      const symBody = document.querySelector('#symbolTable tbody');
+      symBody.innerHTML = '';
+      const syms = Object.entries(d.by_symbol || {}).sort((a, b) => b[1].pnl - a[1].pnl);
+      syms.forEach(([sym, s]) => {
+        const wr = s.trades ? (s.wins / s.trades * 100).toFixed(1) + '%' : '—';
+        const cls = s.pnl >= 0 ? 'pos' : 'neg';
+        symBody.innerHTML += `
+          <tr>
+            <td><strong>${sym}</strong></td>
+            <td>${s.trades}</td>
+            <td>${s.wins}</td>
+            <td>${s.losses}</td>
+            <td>${wr}</td>
+            <td class="${cls}">$${s.pnl.toFixed(2)}</td>
+          </tr>
+        `;
+      });
+
+      // Reason table
+      const reasonBody = document.querySelector('#reasonTable tbody');
+      reasonBody.innerHTML = '';
+      const reasons = Object.entries(d.by_exit_reason || {}).sort((a, b) => b[1].count - a[1].count);
+      reasons.forEach(([reason, r]) => {
+        const cls = r.pnl >= 0 ? 'pos' : 'neg';
+        reasonBody.innerHTML += `
+          <tr>
+            <td>${reason}</td>
+            <td>${r.count}</td>
+            <td class="${cls}">$${r.pnl.toFixed(2)}</td>
+          </tr>
+        `;
+      });
+
+      // Score table
+      const scoreBody = document.querySelector('#scoreTable tbody');
+      scoreBody.innerHTML = '';
+      const scores = d.by_score || {};
+      Object.entries(scores).forEach(([bucket, s]) => {
+        if (s.count > 0) {
+          const cls = s.pnl >= 0 ? 'pos' : 'neg';
+          scoreBody.innerHTML += `
+            <tr>
+              <td>${bucket}</td>
+              <td>${s.count}</td>
+              <td class="${cls}">$${s.pnl.toFixed(2)}</td>
+            </tr>
+          `;
+        }
+      });
+    }
+
+    load();
+    setInterval(load, 30000);
+  </script>
+</body>
+</html>

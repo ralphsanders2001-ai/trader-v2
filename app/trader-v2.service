@@ -1,0 +1,18 @@
+[Unit]
+Description=Trader V2 Daemon (live trading)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/ralph/trader-v2
+ExecStart=/home/ralph/robinhood-trainer/venv/bin/python /home/ralph/trader-v2/scripts/daemon.py
+Restart=on-failure
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Trader V2 — Settings</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #1a1a1a; color: #e0e0e0; margin: 0; padding: 20px; }
+h1, h2 { color: #fff; }
+.group { background: #2a2a2a; padding: 16px; border-radius: 8px; margin-bottom: 20px; }
+.setting { display: grid; grid-template-columns: 2fr 1fr 2fr; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid #3a3a3a; }
+.setting:last-child { border-bottom: none; }
+.label { color: #ccc; }
+input[type="text"], input[type="number"] { background: #1a1a1a; color: #e0e0e0; border: 1px solid #444; padding: 6px 10px; border-radius: 4px; font-family: monospace; }
+input[type="checkbox"] { transform: scale(1.5); }
+.btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; background: #2563eb; color: white; }
+.btn:hover { background: #1d4ed8; }
+.toast { position: fixed; top: 20px; right: 20px; padding: 12px 20px; border-radius: 4px; background: #4ade80; color: #000; display: none; font-weight: 600; }
+.toast.error { background: #f87171; }
+</style>
+</head>
+<body>
+<h1>Settings</h1>
+<p style="color: #888;">All changes are saved to <code>config.py</code> and hot-reloaded within 5 seconds.</p>
+<a href="/" class="btn" style="margin-bottom: 16px; display: inline-block;">← Back to Live</a>
+
+<form id="settings-form">
+{% for group_name, settings in groups.items() %}
+<div class="group">
+  <h2>{{ group_name }}</h2>
+  {% for key, setting in settings.items() %}
+  <div class="setting">
+    <div class="label">{{ setting.label }}</div>
+    <div>
+      {% if setting.type == "bool" %}
+      <input type="checkbox" data-key="{{ key }}" {% if setting.value %}checked{% endif %}>
+      {% else %}
+      <input type="{% if setting.type in ['int','float'] %}number{% else %}text{% endif %}"
+             data-key="{{ key }}"
+             data-type="{{ setting.type }}"
+             value="{{ setting.value }}"
+             step="{% if setting.type == 'float' %}0.01{% else %}1{% endif %}">
+      {% endif %}
+    </div>
+    <div style="color: #888; font-size: 0.85em; font-family: monospace;">{{ key }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endfor %}
+
+<button type="button" class="btn" onclick="saveAll()">Save All Changes</button>
+</form>
+
+<h2>Trading Symbols <span id="symbol-count" style="font-size:0.7em; color:#888; font-weight:400;"></span></h2>
+<div class="group">
+  <div id="symbol-list" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:8px; margin-bottom:14px;">Loading…</div>
+  <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+    <input type="text" id="new-symbol" placeholder="e.g. SOFI" style="text-transform:uppercase; padding:8px 10px; background:#1a1a1a; color:#e0e0e0; border:1px solid #444; border-radius:4px; font-family:monospace; width:120px;">
+    <button type="button" class="btn" onclick="addSymbol()">Add Symbol</button>
+    <span style="color:#888; font-size:0.85em;">Unchecked = disabled for trading. ✕ removes from watchlist.</span>
+  </div>
+</div>
+
+<h2>Per-Symbol Overrides</h2>
+<div class="group">
+  <div style="color:#888; font-size:0.85em; margin-bottom:10px;">
+    Per-symbol values override the globals above. Blank field = use global. Sell-off % and Exit % are the same knob.
+  </div>
+  <div style="overflow-x:auto;">
+  <table id="symset-table" style="border-collapse:collapse; width:100%; font-size:0.85em;">
+    <thead>
+      <tr style="color:#aaa; text-align:left;">
+        <th style="padding:4px 8px;">Symbol</th>
+        <th style="padding:4px 8px;">Hours (ET)<br><span style="font-weight:400">HH:MM-HH:MM</span></th>
+        <th style="padding:4px 8px;">Buy % off</th>
+        <th style="padding:4px 8px;">Limit $ off</th>
+        <th style="padding:4px 8px;">Exit %</th>
+        <th style="padding:4px 8px;">Max loss %</th>
+        <th style="padding:4px 8px;">Max loss $</th>
+        <th style="padding:4px 8px;">Take profit $</th>
+        <th style="padding:4px 8px;">Max profit $</th>
+        <th style="padding:4px 8px;">Hold (min)</th>
+        <th style="padding:4px 8px;"></th>
+      </tr>
+    </thead>
+    <tbody id="symset-rows"><tr><td colspan="11" style="padding:8px; color:#888;">Loading…</td></tr></tbody>
+  </table>
+  </div>
+</div>
+
+<h2>Daily State</h2>
+<div class="group" id="daily-state">
+  <div id="cb-summary" style="margin-bottom:12px;">Loading…</div>
+
+  <h3 style="color:#fff; margin:12px 0 8px;">Symbols today</h3>
+  <div id="symbol-rows"></div>
+
+  <div style="margin-top:14px; display:flex; gap:12px; flex-wrap:wrap;">
+    <button type="button" class="btn" onclick="resetCooldowns()">Reset All Cooldowns / Blocks</button>
+    <button type="button" class="btn" onclick="resetCircuitBreaker()">Reset Daily Loss ($ P&L → 0)</button>
+  </div>
+
+  <div style="margin-top:18px; border-top:1px solid #3a3a3a; padding-top:14px;">
+    <h3 style="color:#fff; margin:0 0 8px;">Daily Starting Balance</h3>
+    <div class="setting">
+      <div class="label">Trader's daily starting $ amount</div>
+      <div><input type="number" id="daily-balance" step="0.01"></div>
+      <div><button type="button" class="btn" onclick="saveBalance()">Save Balance</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+function loadDailyState() {
+  fetch('/api/daily-state')
+    .then(r => r.json())
+    .then(d => {
+      const cb = d.circuit_breaker || {};
+      document.getElementById('cb-summary').innerHTML =
+        `<b>Today's realized P&L:</b> <span style="color:${(cb.realized_pnl||0) < 0 ? '#f87171' : '#4ade80'}">$${(cb.realized_pnl||0).toFixed(2)}</span>` +
+        (cb.tripped ? ' — <b style="color:#f87171">CIRCUIT BREAKER TRIPPED</b>' : '');
+      const rows = document.getElementById('symbol-rows');
+      if (!d.symbols || d.symbols.length === 0) {
+        rows.innerHTML = '<div style="color:#888">No symbols traded today — nothing in cooldown.</div>';
+        return;
+      }
+      rows.innerHTML = d.symbols.map(s => {
+        let status, color;
+        if (s.blocked_for_day) { status = 'BLOCKED FOR DAY'; color = '#f87171'; }
+        else if (s.in_cooldown) { status = `cooldown ${s.cooldown_remaining_min}m left`; color = '#fbbf24'; }
+        else { status = 'ok'; color = '#4ade80'; }
+        return `<div class="setting">
+          <div class="label"><b>${s.symbol}</b> — ${s.wins_today}W/${s.losses_today}L, $${s.realized_pnl.toFixed(2)}</div>
+          <div style="color:${color}; font-weight:600;">${status}</div>
+          <div><button type="button" class="btn" onclick="resetCooldowns('${s.symbol}')">Reset</button></div>
+        </div>`;
+      }).join('');
+    })
+    .catch(e => showToast('Load failed: ' + e, true));
+}
+
+function resetCooldowns(symbol) {
+  const body = symbol ? {symbols: [symbol]} : {};
+  if (symbol && !confirm('Reset cooldown/block for ' + symbol + '?')) return;
+  if (!symbol && !confirm('Reset cooldowns/blocks for ALL symbols today?')) return;
+  fetch('/api/daily-state/reset', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)})
+    .then(r => r.json())
+    .then(d => { showToast(d.success ? `Reset ${d.rows_reset} symbol(s) ✓` : 'Reset failed: ' + (d.error||'?'), !d.success); loadDailyState(); })
+    .catch(e => showToast('Network error: ' + e, true));
+}
+
+function resetCircuitBreaker() {
+  if (!confirm("Reset today's daily loss counter to $0 and untrip the circuit breaker?")) return;
+  fetch('/api/circuit-breaker/reset', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'})
+    .then(r => r.json())
+    .then(d => { showToast(d.success ? 'Daily loss counter reset ✓' : 'Reset failed', !d.success); loadDailyState(); })
+    .catch(e => showToast('Network error: ' + e, true));
+}
+
+function saveBalance() {
+  const v = parseFloat(document.getElementById('daily-balance').value);
+  if (isNaN(v)) { showToast('Enter a valid number', true); return; }
+  if (!confirm('Set daily starting balance to $' + v + '?')) return;
+  fetch('/api/balance', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({value: v})})
+    .then(r => r.json())
+    .then(d => { showToast(d.success ? `Balance saved: $${v} ✓` : 'Save failed: ' + (d.error||'?'), !d.success); })
+    .catch(e => showToast('Network error: ' + e, true));
+}
+
+function loadSymbols() {
+  fetch('/api/symbols')
+    .then(r => r.json())
+    .then(d => {
+      const box = document.getElementById('symbol-list');
+      box.innerHTML = d.symbols.map(s => `
+        <div style="display:flex; align-items:center; gap:8px; background:#1f1f1f; padding:8px 10px; border-radius:4px;">
+          <input type="checkbox" id="sym-${s.symbol}" ${s.enabled ? 'checked' : ''} onchange="toggleSymbol('${s.symbol}', this.checked)" style="transform:scale(1.3);">
+          <label for="sym-${s.symbol}" style="cursor:pointer; font-weight:600; ${s.enabled ? 'color:#e0e0e0' : 'color:#777; text-decoration:line-through'}">${s.symbol}</label>
+          <button type="button" onclick="removeSymbol('${s.symbol}')" title="Remove from watchlist" style="background:none; border:none; color:#f87171; cursor:pointer; font-weight:700; margin-left:auto;">✕</button>
+        </div>
+      `).join('');
+      const cnt = document.getElementById('symbol-count');
+      if (cnt && typeof d.enabled_count === 'number') {
+        cnt.textContent = `(${d.enabled_count}/${d.max_active} active)`;
+        cnt.style.color = d.enabled_count >= d.max_active ? '#f87171' : '#888';
+      }
+    })
+    .catch(e => showToast('Symbol load failed: ' + e, true));
+}
+
+function toggleSymbol(symbol, enabled) {
+  if (!enabled && !confirm(`DISABLE ${symbol} for trading?\nThe bot will reject any new ${symbol} signals.`)) {
+    document.getElementById('sym-' + symbol).checked = true;
+    return;
+  }
+  if (enabled && !confirm(`ENABLE ${symbol} for trading?`)) {
+    document.getElementById('sym-' + symbol).checked = false;
+    return;
+  }
+  fetch('/api/symbols/toggle', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({symbol: symbol, enabled: enabled})})
+    .then(r => r.json())
+    .then(d => { showToast(d.success ? `${symbol} ${enabled ? 'enabled' : 'disabled'} ✓` : 'Failed: ' + (d.error||'?'), !d.success); loadSymbols(); })
+    .catch(e => showToast('Network error: ' + e, true));
+}
+
+function addSymbol() {
+  const inp = document.getElementById('new-symbol');
+  const sym = inp.value.trim().toUpperCase();
+  if (!sym) { showToast('Enter a symbol first', true); return; }
+  if (!/^[A-Z.]{1,6}$/.test(sym)) { showToast('Invalid symbol format', true); return; }
+  if (!confirm(`Add ${sym} to the trading watchlist (enabled)?`)) return;
+  fetch('/api/symbols/add', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({symbol: sym})})
+    .then(r => r.json())
+    .then(d => {
+      if (d.success) { showToast(d.added.length ? `${sym} added ✓` : `${sym} already on watchlist`, false); inp.value = ''; loadSymbols(); }
+      else showToast('Add failed: ' + (d.error||'?'), true);
+    })
+    .catch(e => showToast('Network error: ' + e, true));
+}
+
+function removeSymbol(symbol) {
+  if (!confirm(`REMOVE ${symbol} from the trading watchlist?\nIt will no longer be scanned or traded. Open positions are NOT affected.`)) return;
+  fetch('/api/symbols/remove', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({symbol: symbol})})
+    .then(r => r.json())
+    .then(d => { showToast(d.success ? `${symbol} removed ✓` : 'Remove failed: ' + (d.error||'?'), !d.success); loadSymbols(); })
+    .catch(e => showToast('Network error: ' + e, true));
+}
+
+loadDailyState();
+setInterval(loadDailyState, 30000);
+loadSymbols();
+loadSymSettings();
+setInterval(loadSymSettings, 30000);
+
+function saveAll() {
+  const inputs = document.querySelectorAll('input[data-key]');
+  const promises = [];
+  for (const input of inputs) {
+    let value;
+    if (input.type === 'checkbox') value = input.checked;
+    else if (input.dataset.type === 'int') value = parseInt(input.value);
+    else if (input.dataset.type === 'float') value = parseFloat(input.value);
+    else if (input.dataset.type === 'list') value = input.value;
+    else value = input.value;
+    // Only save fields the user actually changed — prevents a stale tab
+    // from writing old values over newer saved ones ("reverting" settings).
+    const orig = input.type === 'checkbox'
+      ? input.defaultChecked
+      : (input.dataset.orig !== undefined ? input.dataset.orig : input.defaultValue);
+    const current = input.type === 'checkbox' ? input.checked : String(input.value);
+    if (current === String(orig)) continue;
+    promises.push(
+      fetch('/api/settings/update', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({key: input.dataset.key, value: value})
+      })
+    );
+  }
+  if (promises.length === 0) {
+    showToast('No changes to save', false);
+    return;
+  }
+  Promise.all(promises)
+    .then(responses => Promise.all(responses.map(r => r.json())))
+    .then(results => {
+      const errors = results.filter(r => !r.success);
+      if (errors.length === 0) {
+        showToast(`Saved ${results.length} settings ✓`, false);
+      } else {
+        showToast(`${errors.length} errors: ${JSON.stringify(errors[0])}`, true);
+      }
+    })
+    .catch(e => showToast('Network error: ' + e, true));
+}
+
+function showToast(msg, isError) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (isError ? ' error' : '');
+  t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 4000);
+}
+
+// ---- Per-symbol overrides ---------------------------------------------------
+let SS_DATA = {overrides: {}, globals: {}, keys: {}};
+const SS_FIELDS = [
+  ['trading_hours',  'str'],
+  ['buy_pct_offset', 'float'],
+  ['limit_offset',   'float'],
+  ['exit_pct',       'float'],
+  ['max_loss_pct',   'float'],
+  ['max_loss_dollar','float'],
+  ['take_profit',    'float'],
+  ['max_profit',     'float'],
+  ['hold_time_min',  'int'],
+];
+
+async function loadSymSettings() {
+  if (document.activeElement && document.activeElement.id && document.activeElement.id.startsWith('ss-')) return; // don't clobber mid-edit
+  try {
+    const syms = await fetch('/api/symbols').then(r => r.json());
+    SS_DATA = await fetch('/api/symbol-settings').then(r => r.json());
+    const rows = document.getElementById('symset-rows');
+    if (!rows) return;
+    const symbols = (d => d)(syms.symbols || []).map(s => s.symbol);
+    rows.innerHTML = symbols.map(sym => {
+      const ov = SS_DATA.overrides[sym] || {};
+      const cells = SS_FIELDS.map(([key, type]) => {
+        const val = ov[key] !== undefined ? ov[key] : '';
+        const ph = SS_DATA.globals[key] !== undefined && SS_DATA.globals[key] !== null ? SS_DATA.globals[key] : '—';
+        return `<td style="padding:3px 6px;"><input type="text" id="ss-${sym}-${key}" value="${val}"
+                 placeholder="${ph}" data-sym="${sym}" data-sskey="${key}" data-type="${type}"
+                 style="width:80px; padding:4px 6px; background:#111; color:#e0e0e0; border:1px solid #333; border-radius:3px; font-family:monospace;"></td>`;
+      }).join('');
+      const hasOv = Object.keys(ov).length > 0;
+      return `<tr style="border-top:1px solid #222;">
+        <td style="padding:3px 8px; font-weight:700; ${hasOv ? 'color:#4ade80' : 'color:#e0e0e0'}">${sym}</td>
+        ${cells}
+        <td style="padding:3px 6px;"><button type="button" class="btn" style="padding:2px 8px; font-size:0.8em;" onclick="symSetClear('${sym}')">reset</button></td>
+      </tr>`;
+    }).join('');
+  } catch (e) {
+    const rows = document.getElementById('symset-rows');
+    if (rows) rows.innerHTML = '<tr><td colspan="11" style="padding:8px; color:#f87171;">Load failed: ' + e + '</td></tr>';
+  }
+}
+
+function symSetSave(input) {
+  const sym = input.dataset.sym, key = input.dataset.sskey;
+  let val = input.value.trim();
+  if (val === '' || val === String(SS_DATA.globals[key])) {
+    // blank or identical to global = clear override
+    if (val === '') { symSetPost(sym, key, null); return; }
+  }
+  symSetPost(sym, key, val);
+}
+
+async function symSetPost(sym, key, value) {
+  try {
+    const r = await fetch('/api/symbol-settings/set', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({symbol: sym, key: key, value: value})
+    });
+    const d = await r.json();
+    if (d.success) { showToast(`${sym} ${key} ${value === null ? 'reset to global' : '= ' + value} ✓`); loadSymSettings(); }
+    else showToast('Failed: ' + (d.error || '?'), true);
+  } catch (e) { showToast('Network error: ' + e, true); }
+}
+
+async function symSetClear(sym) {
+  if (!confirm('Reset ALL overrides for ' + sym + ' to globals?')) return;
+  try {
+    const r = await fetch('/api/symbol-settings/clear', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({symbol: sym})
+    });
+    const d = await r.json();
+    if (d.success) { showToast(sym + ' overrides cleared ✓'); loadSymSettings(); }
+    else showToast('Failed: ' + (d.error || '?'), true);
+  } catch (e) { showToast('Network error: ' + e, true); }
+}
+
+// save on Enter / blur
+document.addEventListener('change', e => {
+  if (e.target && e.target.id && e.target.id.startsWith('ss-')) symSetSave(e.target);
+});
+
+// load with the rest of the page
+</script>
+</body>
+</html>

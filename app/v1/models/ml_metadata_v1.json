@@ -1,0 +1,146 @@
+{
+  "test_auc": 0.8787878787878788,
+  "cv_auc_mean": 0.7,
+  "cv_auc_std": 0.1983402202661039,
+  "train_size": 53,
+  "test_size": 14,
+  "train_win_rate": 0.16981132075471697,
+  "test_win_rate": 0.21428571428571427,
+  "feature_importance": [
+    {
+      "feature": "symbol_prior_winrate",
+      "importance": 0.17384003102779388
+    },
+    {
+      "feature": "recent_5_winrate",
+      "importance": 0.15613338351249695
+    },
+    {
+      "feature": "symbol_prior_avg_pnl",
+      "importance": 0.12135835736989975
+    },
+    {
+      "feature": "day_of_week",
+      "importance": 0.07857679575681686
+    },
+    {
+      "feature": "pnl_today",
+      "importance": 0.05934670567512512
+    },
+    {
+      "feature": "avg_pnl_today",
+      "importance": 0.05182924121618271
+    },
+    {
+      "feature": "entry_price",
+      "importance": 0.04912792146205902
+    },
+    {
+      "feature": "symbol_prior_total_pnl",
+      "importance": 0.04698936268687248
+    },
+    {
+      "feature": "minutes_since_last_symbol_trade",
+      "importance": 0.03948882222175598
+    },
+    {
+      "feature": "losses_today",
+      "importance": 0.037168826907873154
+    },
+    {
+      "feature": "minutes_since_open",
+      "importance": 0.03663356229662895
+    },
+    {
+      "feature": "symbol_prior_trades",
+      "importance": 0.03300747275352478
+    },
+    {
+      "feature": "minute",
+      "importance": 0.03101404942572117
+    },
+    {
+      "feature": "trades_today_count",
+      "importance": 0.023556619882583618
+    },
+    {
+      "feature": "consecutive_losses",
+      "importance": 0.01729213073849678
+    },
+    {
+      "feature": "recent_5_avg_pnl",
+      "importance": 0.015258501283824444
+    },
+    {
+      "feature": "wins_today",
+      "importance": 0.013015463948249817
+    },
+    {
+      "feature": "last_symbol_trade_was_loss",
+      "importance": 0.010870924219489098
+    },
+    {
+      "feature": "recent_5_loss_count",
+      "importance": 0.004037889186292887
+    },
+    {
+      "feature": "hour",
+      "importance": 0.0014539273688569665
+    },
+    {
+      "feature": "is_first_30_min",
+      "importance": 0.0
+    },
+    {
+      "feature": "is_call",
+      "importance": 0.0
+    },
+    {
+      "feature": "entry_score",
+      "importance": 0.0
+    },
+    {
+      "feature": "is_morning",
+      "importance": 0.0
+    },
+    {
+      "feature": "is_put",
+      "importance": 0.0
+    },
+    {
+      "feature": "strike",
+      "importance": 0.0
+    }
+  ],
+  "feature_columns": [
+    "entry_score",
+    "is_call",
+    "is_put",
+    "entry_price",
+    "hour",
+    "minute",
+    "day_of_week",
+    "is_morning",
+    "is_first_30_min",
+    "minutes_since_open",
+    "strike",
+    "consecutive_losses",
+    "trades_today_count",
+    "losses_today",
+    "wins_today",
+    "pnl_today",
+    "avg_pnl_today",
+    "symbol_prior_trades",
+    "symbol_prior_winrate",
+    "symbol_prior_avg_pnl",
+    "symbol_prior_total_pnl",
+    "minutes_since_last_symbol_trade",
+    "last_symbol_trade_was_loss",
+    "recent_5_avg_pnl",
+    "recent_5_winrate",
+    "recent_5_loss_count"
+  ],
+  "trained_at": "2026-08-06T16:41:55.486558",
+  "model_path": "/home/ralph/trader-v2/models/ml_model_v1.json",
+  "model_type": "XGBClassifier"
+}
